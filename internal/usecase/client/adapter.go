@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 
+	localcfg "github.com/CAMELNINGA/cloudphoto/config"
+	"github.com/CAMELNINGA/cloudphoto/internal/domain"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -13,17 +15,27 @@ import (
 
 type adapter struct {
 	logger *zerolog.Logger
+	config *localcfg.Config
 	client *s3.Client
 }
 
-func createClinet() *s3.Client {
+func NewAdapter(logger *zerolog.Logger, config *localcfg.Config) (domain.Client, error) {
+	a := &adapter{
+		logger: logger,
+		config: config,
+	}
+	a.client = a.createClinet()
+	return a, nil
+}
+
+func (a *adapter) createClinet() *s3.Client {
 	// Создаем кастомный обработчик эндпоинтов, который для сервиса S3 и региона ru-central1 выдаст корректный URL
 	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 		if service == s3.ServiceID && region == "ru-central1" {
 			return aws.Endpoint{
 				PartitionID:   "yc",
-				URL:           "https://storage.yandexcloud.net",
-				SigningRegion: "ru-central1",
+				URL:           a.config.EndpointUrl,
+				SigningRegion: a.config.Region,
 			}, nil
 		}
 		return aws.Endpoint{}, fmt.Errorf("unknown endpoint requested")
@@ -40,10 +52,10 @@ func createClinet() *s3.Client {
 	return client
 }
 
-func loadDefaultConfig(client *s3.Client) {
+func (a *adapter) LoadDefaultConfig() {
 
 	// Запрашиваем список бакетов
-	result, err := client.ListBuckets(context.TODO(), &s3.ListBucketsInput{})
+	result, err := a.client.ListBuckets(context.TODO(), &s3.ListBucketsInput{})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -54,10 +66,10 @@ func loadDefaultConfig(client *s3.Client) {
 
 }
 
-func listObject(client *s3.Client, bucketName *string) {
+func (a *adapter) ListObject() {
 	// Запрашиваем список бакетов
-	object, err := client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-		Bucket: aws.String(*bucketName),
+	object, err := a.client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+		Bucket: aws.String(a.config.Bucket),
 	})
 	if err != nil {
 		log.Fatal(err)
