@@ -29,4 +29,5 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.27.11
 	github.com/aws/smithy-go v1.13.3 // indirect
 	github.com/rs/zerolog v1.28.0
+	gopkg.in/ini.v1 v1.67.0
 )
