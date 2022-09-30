@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 
 	localcfg "github.com/CAMELNINGA/cloudphoto/config"
@@ -10,20 +11,24 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/rs/zerolog"
 )
 
 type adapter struct {
-	logger *zerolog.Logger
+	logger zerolog.Logger
 	config *localcfg.Config
 	client *s3.Client
+	ctx    context.Context
 }
 
-func NewAdapter(logger *zerolog.Logger, config *localcfg.Config) (domain.Client, error) {
+func NewAdapter(logger zerolog.Logger, config *localcfg.Config) (domain.Client, error) {
 	a := &adapter{
 		logger: logger,
 		config: config,
 	}
+	a.ctx = context.Background()
+	a.ctx = a.logger.With().Str("process", "s3 ").Logger().WithContext(a.ctx)
 	a.client = a.createClinet()
 	return a, nil
 }
@@ -42,7 +47,10 @@ func (a *adapter) createClinet() *s3.Client {
 	})
 
 	// Подгружаем конфигрурацию из ~/.aws/*
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithEndpointResolverWithOptions(customResolver))
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		//config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("AKID", "SECRET_KEY", "TOKEN")),
+		config.WithEndpointResolverWithOptions(customResolver),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -52,30 +60,94 @@ func (a *adapter) createClinet() *s3.Client {
 	return client
 }
 
-func (a *adapter) LoadDefaultConfig() {
+func (a *adapter) LoadDefaultConfig() ([]string, error) {
 
 	// Запрашиваем список бакетов
 	result, err := a.client.ListBuckets(context.TODO(), &s3.ListBucketsInput{})
 	if err != nil {
-		log.Fatal(err)
+		a.logger.Err(err).Msg("Error while upload list bucket")
+		return nil, domain.ErrInternalS3
 	}
-
+	buckets := make([]string, 0)
 	for _, bucket := range result.Buckets {
-		log.Printf("backet=%s creation time=%s", aws.ToString(bucket.Name), bucket.CreationDate.Format("2006-01-02 15:04:05 Monday"))
+		buckets = append(buckets, aws.ToString(bucket.Name))
 	}
-
+	return buckets, nil
 }
 
-func (a *adapter) ListObject() {
+func (a *adapter) ListObject() ([]string, error) {
 	// Запрашиваем список бакетов
 	object, err := a.client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(a.config.Bucket),
 	})
 	if err != nil {
-		log.Fatal(err)
+		a.logger.Err(err).Msg("Error while upload list bucket")
+		return nil, domain.ErrInternalS3
+	}
+	objects := make([]string, 0)
+	for _, object := range object.Contents {
+		objects = append(objects, aws.ToString(object.Key))
+	}
+	return objects, nil
+}
+
+func (a *adapter) PutObject(file io.Reader, key string, size int64) error {
+	_, err := a.client.PutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket:        aws.String(a.config.Bucket),
+		Key:           aws.String("path/myfile.jpg"),
+		Body:          file,
+		ContentLength: size,
+	})
+	if err != nil {
+		a.logger.Err(err).Msg("Error while upload object in bucket")
+		return domain.ErrInternalS3
+	}
+	return nil
+
+}
+
+func (a *adapter) CreateBucket(name string) error {
+	_, err := a.client.CreateBucket(context.TODO(), &s3.CreateBucketInput{
+		Bucket: aws.String(name),
+		ACL:    types.BucketCannedACLPublicRead,
+	})
+
+	if err != nil {
+		a.logger.Err(err).Msg("Error while create bucket")
+		return domain.ErrInternalS3
+	}
+	return nil
+}
+
+func (a *adapter) DeleteObject(name string) error {
+	// Delete a single object.
+	_, err := a.client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+		Bucket: aws.String(name),
+		Key:    aws.String("other/file.jpg"),
+	})
+	if err != nil {
+		a.logger.Err(err).Msg("Error while delete object in bucket")
+		return domain.ErrInternalS3
+	}
+	return nil
+}
+
+func (a *adapter) Getobject(key string) ([]byte, error) {
+	resp, err := a.client.GetObject(context.TODO(), &s3.GetObjectInput{
+		Bucket:       aws.String(a.config.Bucket),
+		Key:          aws.String(key),
+		RequestPayer: types.RequestPayerRequester,
+	})
+
+	if err != nil {
+		a.logger.Err(err).Msg("Error while get object in bucket")
+		return nil, domain.ErrInternalS3
 	}
 
-	for _, object := range object.Contents {
-		log.Printf("object=%s size=%d Bytes last modified=%s", aws.ToString(object.Key), object.Size, object.LastModified.Format("2006-01-02 15:04:05 Monday"))
+	file, err := io.ReadAll(resp.Body)
+	if err != nil {
+		a.logger.Err(err).Msg("Error while get object in bucket")
+		return nil, domain.ErrInternalS3
 	}
+	return file, nil
 }
