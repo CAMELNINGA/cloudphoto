@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 
 	localcfg "github.com/CAMELNINGA/cloudphoto/config"
 	"github.com/CAMELNINGA/cloudphoto/internal/domain"
@@ -12,28 +11,23 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/rs/zerolog"
 )
 
 type adapter struct {
-	logger zerolog.Logger
+	//logger *zerolog.Logger
 	config *localcfg.Config
 	client *s3.Client
 	ctx    context.Context
 }
 
-func NewAdapter(logger zerolog.Logger, config *localcfg.Config) (domain.Client, error) {
-	a := &adapter{
-		logger: logger,
-		config: config,
-	}
-	a.ctx = context.Background()
-	a.ctx = a.logger.With().Str("process", "s3 ").Logger().WithContext(a.ctx)
-	a.client = a.createClinet()
-	return a, nil
+func NewAdapter() domain.Client {
+	a := &adapter{}
+
+	return a
 }
 
-func (a *adapter) createClinet() *s3.Client {
+func (a *adapter) InitClient(localcfg *localcfg.Config) error {
+	a.config = localcfg
 	// Создаем кастомный обработчик эндпоинтов, который для сервиса S3 и региона ru-central1 выдаст корректный URL
 	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 		if service == s3.ServiceID && region == "ru-central1" {
@@ -52,12 +46,16 @@ func (a *adapter) createClinet() *s3.Client {
 		config.WithEndpointResolverWithOptions(customResolver),
 	)
 	if err != nil {
-		log.Fatal(err)
+		//a.logger.Err(err).Msg("Error while init config")
+		return domain.ErrInternalS3
 	}
 
 	// Создаем клиента для доступа к хранилищу S3
 	client := s3.NewFromConfig(cfg)
-	return client
+	a.client = client
+	a.LoadDefaultConfig()
+	a.ListObject()
+	return nil
 }
 
 func (a *adapter) LoadDefaultConfig() ([]string, error) {
@@ -65,11 +63,12 @@ func (a *adapter) LoadDefaultConfig() ([]string, error) {
 	// Запрашиваем список бакетов
 	result, err := a.client.ListBuckets(context.TODO(), &s3.ListBucketsInput{})
 	if err != nil {
-		a.logger.Err(err).Msg("Error while upload list bucket")
+		//a.logger.Err(err).Msg("Error while upload list bucket")
 		return nil, domain.ErrInternalS3
 	}
 	buckets := make([]string, 0)
 	for _, bucket := range result.Buckets {
+		//a.logger.Debug().Msgf("backet=%s creation time=%s", aws.ToString(bucket.Name), bucket.CreationDate.Format("2006-01-02 15:04:05 Monday"))
 		buckets = append(buckets, aws.ToString(bucket.Name))
 	}
 	return buckets, nil
@@ -81,11 +80,12 @@ func (a *adapter) ListObject() ([]string, error) {
 		Bucket: aws.String(a.config.Bucket),
 	})
 	if err != nil {
-		a.logger.Err(err).Msg("Error while upload list bucket")
+		//a.logger.Err(err).Msg("Error while upload list bucket")
 		return nil, domain.ErrInternalS3
 	}
 	objects := make([]string, 0)
 	for _, object := range object.Contents {
+		//a.logger.Debug().Msgf("object=%s size=%d Bytes last modified=%s", aws.ToString(object.Key), object.Size, object.LastModified.Format("2006-01-02 15:04:05 Monday"))
 		objects = append(objects, aws.ToString(object.Key))
 	}
 	return objects, nil
@@ -99,7 +99,7 @@ func (a *adapter) PutObject(file io.Reader, key string, size int64) error {
 		ContentLength: size,
 	})
 	if err != nil {
-		a.logger.Err(err).Msg("Error while upload object in bucket")
+		//a.logger.Err(err).Msg("Error while upload object in bucket")
 		return domain.ErrInternalS3
 	}
 	return nil
@@ -113,7 +113,7 @@ func (a *adapter) CreateBucket(name string) error {
 	})
 
 	if err != nil {
-		a.logger.Err(err).Msg("Error while create bucket")
+		//a.logger.Err(err).Msg("Error while create bucket")
 		return domain.ErrInternalS3
 	}
 	return nil
@@ -126,7 +126,7 @@ func (a *adapter) DeleteObject(name string) error {
 		Key:    aws.String("other/file.jpg"),
 	})
 	if err != nil {
-		a.logger.Err(err).Msg("Error while delete object in bucket")
+		//a.logger.Err(err).Msg("Error while delete object in bucket")
 		return domain.ErrInternalS3
 	}
 	return nil
@@ -140,13 +140,13 @@ func (a *adapter) Getobject(key string) ([]byte, error) {
 	})
 
 	if err != nil {
-		a.logger.Err(err).Msg("Error while get object in bucket")
+		//a.logger.Err(err).Msg("Error while get object in bucket")
 		return nil, domain.ErrInternalS3
 	}
 
 	file, err := io.ReadAll(resp.Body)
 	if err != nil {
-		a.logger.Err(err).Msg("Error while get object in bucket")
+		//a.logger.Err(err).Msg("Error while get object in bucket")
 		return nil, domain.ErrInternalS3
 	}
 	return file, nil
