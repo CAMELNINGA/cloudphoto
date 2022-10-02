@@ -53,8 +53,6 @@ func (a *adapter) InitClient(localcfg *localcfg.Config) error {
 	// Создаем клиента для доступа к хранилищу S3
 	client := s3.NewFromConfig(cfg)
 	a.client = client
-	a.LoadDefaultConfig()
-	a.ListObject()
 	return nil
 }
 
@@ -68,7 +66,7 @@ func (a *adapter) LoadDefaultConfig() ([]string, error) {
 	}
 	buckets := make([]string, 0)
 	for _, bucket := range result.Buckets {
-		//a.logger.Debug().Msgf("backet=%s creation time=%s", aws.ToString(bucket.Name), bucket.CreationDate.Format("2006-01-02 15:04:05 Monday"))
+		fmt.Printf("backet=%s creation time=%s", aws.ToString(bucket.Name), bucket.CreationDate.Format("2006-01-02 15:04:05 Monday"))
 		buckets = append(buckets, aws.ToString(bucket.Name))
 	}
 	return buckets, nil
@@ -85,7 +83,7 @@ func (a *adapter) ListObject() ([]string, error) {
 	}
 	objects := make([]string, 0)
 	for _, object := range object.Contents {
-		//a.logger.Debug().Msgf("object=%s size=%d Bytes last modified=%s", aws.ToString(object.Key), object.Size, object.LastModified.Format("2006-01-02 15:04:05 Monday"))
+		fmt.Printf("object=%s size=%d Bytes last modified=%s", aws.ToString(object.Key), object.Size, object.LastModified.Format("2006-01-02 15:04:05 Monday"))
 		objects = append(objects, aws.ToString(object.Key))
 	}
 	return objects, nil
@@ -122,8 +120,8 @@ func (a *adapter) CreateBucket(name string) error {
 func (a *adapter) DeleteObject(name string) error {
 	// Delete a single object.
 	_, err := a.client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
-		Bucket: aws.String(name),
-		Key:    aws.String("other/file.jpg"),
+		Bucket: aws.String(a.config.Bucket),
+		Key:    aws.String(name),
 	})
 	if err != nil {
 		//a.logger.Err(err).Msg("Error while delete object in bucket")
