@@ -13,4 +13,5 @@ type Client interface {
 	PutObject(file io.Reader, key string, size int64) error
 	ListObject() ([]string, error)
 	LoadDefaultConfig() ([]string, error)
+	DeleteObject(name string) error
 }

@@ -92,7 +92,7 @@ func (a *adapter) ListObject() ([]string, error) {
 func (a *adapter) PutObject(file io.Reader, key string, size int64) error {
 	_, err := a.client.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket:        aws.String(a.config.Bucket),
-		Key:           aws.String("path/myfile.jpg"),
+		Key:           aws.String(key),
 		Body:          file,
 		ContentLength: size,
 	})
