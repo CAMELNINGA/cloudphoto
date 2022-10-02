@@ -8,7 +8,7 @@ import (
 func Run() {
 	cfg, err := config.NewConfig()
 	if err != nil {
-
+		panic(err)
 	}
 	//sampled := log.Sample(&zerolog.BasicSampler{N: 10})
 	client := client.NewAdapter()

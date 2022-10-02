@@ -20,15 +20,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.13.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.16.19 // indirect
 	github.com/aws/smithy-go v1.13.3 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/stretchr/testify v1.8.0 // indirect
-	golang.org/x/sys v0.0.0-20220928140112-f11e5e49a4ec // indirect
 )
 
 require (
 	github.com/aws/aws-sdk-go-v2/config v1.17.7
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.27.11
-	github.com/rs/zerolog v1.28.0
 	gopkg.in/ini.v1 v1.67.0
 )

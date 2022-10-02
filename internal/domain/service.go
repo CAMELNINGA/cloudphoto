@@ -7,20 +7,18 @@ import (
 	"sync"
 
 	"github.com/CAMELNINGA/cloudphoto/config"
-	"github.com/rs/zerolog"
 )
 
 type Service interface {
 }
 
 type service struct {
-	logger *zerolog.Logger
 	client Client
 }
 
-func NewService(logger *zerolog.Logger, client Client) Service {
+func NewService(client Client) Service {
 	return &service{
-		logger: logger,
+
 		client: client,
 	}
 }
@@ -46,13 +44,13 @@ func (s *service) Download(album, dir string) error {
 		f, err := os.Create(name)
 		defer f.Close()
 		if err != nil {
-			s.logger.Err(err).Msg("Error  while creating file")
+			//s.logger.Err(err).Msg("Error  while creating file")
 			return
 		}
 
 		_, err = f.Write(b)
 		if err != nil {
-			s.logger.Err(err).Msg("Error  while craeting file")
+			//s.logger.Err(err).Msg("Error  while craeting file")
 			return
 		}
 		fmt.Printf("successfully downloaded data from %s/\n to file %s\n", object, name)

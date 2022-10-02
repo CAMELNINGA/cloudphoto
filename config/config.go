@@ -17,12 +17,13 @@ type Config struct {
 
 func NewConfig() (*Config, error) {
 
-	cfg, err := ini.Load("local.ini")
+	cfg, err := ini.Load("config/local.ini")
 	if err != nil {
 		return nil, fmt.Errorf("config error: %w", err)
 	}
 	config := new(Config)
 	err = cfg.Section("DEFAULT").MapTo(config)
+	fmt.Print(*config)
 	return config, nil
 }
 
