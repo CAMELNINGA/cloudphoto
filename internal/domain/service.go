@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sync"
 
@@ -34,9 +35,11 @@ func (s *service) Download(album, dir string) error {
 		return err
 	}
 	a := regexp.MustCompile(`/`)
+
 	var wg sync.WaitGroup
-	d := func(object, dir, name string) {
+	d := func(object, name string) {
 		defer wg.Done()
+
 		b, err := s.client.Getobject(object)
 		if err != nil {
 			fmt.Printf("Error download object %s \n", object)
@@ -60,8 +63,12 @@ func (s *service) Download(album, dir string) error {
 		if album != a[0] {
 			continue
 		}
+		if err := os.MkdirAll(filepath.Dir(object), 0770); err != nil {
+			fmt.Printf("Error creating dir %s \n", filepath.Dir(object))
+		}
 		wg.Add(1)
-		go d(object, dir, a[1])
+
+		go d(object, a[1])
 	}
 
 	wg.Wait()
