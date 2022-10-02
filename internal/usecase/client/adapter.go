@@ -83,7 +83,6 @@ func (a *adapter) ListObject() ([]string, error) {
 	}
 	objects := make([]string, 0)
 	for _, object := range object.Contents {
-		fmt.Printf("object=%s size=%d Bytes last modified=%s", aws.ToString(object.Key), object.Size, object.LastModified.Format("2006-01-02 15:04:05 Monday"))
 		objects = append(objects, aws.ToString(object.Key))
 	}
 	return objects, nil
