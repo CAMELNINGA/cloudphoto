@@ -11,6 +11,11 @@ import (
 )
 
 type Service interface {
+	InitClient(config *config.Config) error
+	Download(album, dir string) error
+	Upload(album, path string) error
+	List(album string) error
+	Delete(album, photo string) error
 }
 
 type service struct {
@@ -85,32 +90,38 @@ func (s *service) Upload(album, path string) error {
 		fmt.Printf("Error scaning dir %s \n", err)
 		return err
 	}
-	op := func(path, file string) {
-		f, err := os.Open(path + file)
+	op := func(path, file string) error {
+		f, err := os.Open(file)
 		if err != nil {
 			fmt.Printf("Error open file %s \n", err)
-			continue
+			return err
 		}
 		defer f.Close()
 		fi, err := f.Stat()
 		if err != nil {
-			fmt.Printf("Error open file %s \n", err)
-			continue
+			fmt.Printf("Error open stat %s \n", err)
+			return err
 		}
-		if err := s.client.PutObject(f, album+"/"+file, fi.Size()); err != nil {
+		a := regexp.MustCompile(`/`)
+		filea := a.Split(file, 2)
+		if err := s.client.PutObject(f, album+"/"+filea[1], fi.Size()); err != nil {
 			fmt.Printf("Error put object %s \n", album+"/"+file)
-			continue
+			return err
 		}
+		return nil
 	}
 
 	for _, file := range files {
-		op(path, file)
+		if err := op(path, file); err != nil {
+			continue
+		}
 	}
 	return err
 }
 
 func FilePathWalkDir(root string) ([]string, error) {
 	var files []string
+
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
 			files = append(files, path)
