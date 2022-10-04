@@ -19,8 +19,6 @@ func NewConfig() (*Config, error) {
 	}
 	config := new(Config)
 	err = cfg.Section("DEFAULT").MapTo(config)
-	fmt.Print(err)
-	fmt.Println(config.EndpointUrl)
 	return config, nil
 }
 

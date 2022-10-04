@@ -9,6 +9,7 @@ import (
 	"github.com/CAMELNINGA/cloudphoto/internal/domain"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
@@ -28,6 +29,11 @@ func NewAdapter() domain.Client {
 
 func (a *adapter) InitClient(localcfg *localcfg.Config) error {
 	a.config = localcfg
+
+	if localcfg.Default == nil {
+		return fmt.Errorf("init config pls")
+	}
+
 	// Создаем кастомный обработчик эндпоинтов, который для сервиса S3 и региона ru-central1 выдаст корректный URL
 	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 		if service == s3.ServiceID && region == "ru-central1" {
@@ -42,17 +48,33 @@ func (a *adapter) InitClient(localcfg *localcfg.Config) error {
 
 	// Подгружаем конфигрурацию из ~/.aws/*
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		//config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("", "SECRET_KEY", "")),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(a.config.AwsAccessKeyID, a.config.AwsSecretAccessKey, "")),
 		config.WithEndpointResolverWithOptions(customResolver),
 	)
 	if err != nil {
-		//a.logger.Err(err).Msg("Error while init config")
+
 		return domain.ErrInternalS3
 	}
 
 	// Создаем клиента для доступа к хранилищу S3
 	client := s3.NewFromConfig(cfg)
 	a.client = client
+	buckets, err := a.LoadDefaultConfig()
+	if err != nil {
+		return domain.ErrInternalS3
+	}
+	var bucket bool
+	for _, v := range buckets {
+		if v == a.config.Bucket {
+			bucket = true
+		}
+	}
+	if !bucket {
+		fmt.Println("creating bucket")
+		if err := a.CreateBucket(a.config.Bucket); err != nil {
+			return fmt.Errorf("error while crating bucket")
+		}
+	}
 	return nil
 }
 
@@ -66,7 +88,6 @@ func (a *adapter) LoadDefaultConfig() ([]string, error) {
 	}
 	buckets := make([]string, 0)
 	for _, bucket := range result.Buckets {
-		fmt.Printf("backet=%s creation time=%s", aws.ToString(bucket.Name), bucket.CreationDate.Format("2006-01-02 15:04:05 Monday"))
 		buckets = append(buckets, aws.ToString(bucket.Name))
 	}
 	return buckets, nil
@@ -78,6 +99,7 @@ func (a *adapter) ListObject() ([]string, error) {
 		Bucket: aws.String(a.config.Bucket),
 	})
 	if err != nil {
+		fmt.Println(err)
 		//a.logger.Err(err).Msg("Error while upload list bucket")
 		return nil, domain.ErrInternalS3
 	}
@@ -110,6 +132,7 @@ func (a *adapter) CreateBucket(name string) error {
 	})
 
 	if err != nil {
+		fmt.Println(err)
 		//a.logger.Err(err).Msg("Error while create bucket")
 		return domain.ErrInternalS3
 	}
@@ -148,3 +171,6 @@ func (a *adapter) Getobject(key string) ([]byte, error) {
 	}
 	return file, nil
 }
+
+//TODO
+//jpeg

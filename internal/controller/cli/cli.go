@@ -117,6 +117,18 @@ func NewAdapter(service domain.Service) error {
 					return service.InitClient(bucket, awskey, awssec)
 				},
 			},
+			{
+				Name:  "mksite",
+				Usage: "make site ",
+				Action: func(ctx *cli.Context) error {
+					url, err := service.MkSite()
+					if err != nil {
+						return err
+					}
+					fmt.Printf("URL : %s \n", url)
+					return nil
+				},
+			},
 		},
 	}
 

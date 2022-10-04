@@ -12,10 +12,12 @@ func Run() {
 	if err != nil {
 		panic(err)
 	}
-	//sampled := log.Sample(&zerolog.BasicSampler{N: 10})
+	init := true
 	client := client.NewAdapter()
-	client.InitClient(cfg)
-	service := domain.NewService(client)
+	if err = client.InitClient(cfg); err != nil {
+		init = false
+	}
+	service := domain.NewService(client, init, cfg)
 	err = cli.NewAdapter(service)
 	if err != nil {
 		panic(err)

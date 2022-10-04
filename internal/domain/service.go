@@ -1,10 +1,13 @@
 package domain
 
 import (
+	"bytes"
 	"fmt"
+	"html/template"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"sync"
 
 	"github.com/CAMELNINGA/cloudphoto/config"
@@ -16,16 +19,20 @@ type Service interface {
 	Upload(album, path string) error
 	List(album string) error
 	Delete(album, photo string) error
+	MkSite() (string, error)
 }
 
 type service struct {
 	client Client
+	init   bool
+	config *config.Config
 }
 
-func NewService(client Client) Service {
+func NewService(client Client, init bool, config *config.Config) Service {
 	return &service{
-
+		init:   init,
 		client: client,
+		config: config,
 	}
 }
 
@@ -34,10 +41,15 @@ func (s *service) InitClient(bucket, awskey, awssec string) error {
 	if err != nil {
 		return err
 	}
+	s.init = true
+	s.config = config
 	return s.client.InitClient(config)
 }
 
 func (s *service) Download(album, dir string) error {
+	if !s.init {
+		return fmt.Errorf("init config pls")
+	}
 	objects, err := s.client.ListObject()
 	if err != nil {
 		fmt.Printf("Error while getig objects %s \n", err)
@@ -86,6 +98,9 @@ func (s *service) Download(album, dir string) error {
 }
 
 func (s *service) Upload(album, path string) error {
+	if !s.init {
+		return fmt.Errorf("init config pls")
+	}
 	if path == "" {
 		path = "./"
 	}
@@ -152,6 +167,10 @@ func haveAlbum(objects []string, album string, a *regexp.Regexp) bool {
 }
 
 func (s *service) List(album string) error {
+	albums := make(map[string]bool, 0)
+	if !s.init {
+		return fmt.Errorf("init config pls")
+	}
 	objects, err := s.client.ListObject()
 	if err != nil {
 		fmt.Printf("Error while getig objects %s \n", err)
@@ -168,11 +187,14 @@ func (s *service) List(album string) error {
 		if album != a[0] && album != "" {
 			continue
 		}
-		if len(a) != 1 {
-			fmt.Printf("Album %s Object %s \n", a[0], a[1])
-		} else {
-			fmt.Printf("Object %s \n", object)
+		if album == "" {
+			albums[a[0]] = true
+		} else if len(a) != 1 {
+			fmt.Printf("Object %s \n", a[1])
 		}
+	}
+	for i := range albums {
+		fmt.Println(i)
 	}
 	return nil
 }
@@ -189,6 +211,9 @@ func haveObject(objects []string, sobject string) bool {
 	return haveAlbum
 }
 func (s *service) Delete(album, photo string) error {
+	if !s.init {
+		return fmt.Errorf("init config pls")
+	}
 	objects, err := s.client.ListObject()
 	if err != nil {
 		fmt.Printf("Error while getig objects %s \n", err)
@@ -224,4 +249,132 @@ func (s *service) Delete(album, photo string) error {
 		}
 	}
 	return nil
+}
+
+type Url struct {
+	Url  string
+	Name string
+}
+type Body struct {
+	Urls []Url
+}
+
+func (s *service) albumfHtml(data *Body) (bytes.Buffer, error) {
+	check := func(b bytes.Buffer, err error) (bytes.Buffer, error) {
+		if err != nil {
+			return b, err
+		}
+		return b, nil
+	}
+
+	var tpl bytes.Buffer
+	t, err := template.New("webpage").Parse(albumHtml)
+	if err != nil {
+		return tpl, err
+	}
+	err = t.Execute(&tpl, data)
+	return check(tpl, err)
+}
+
+func (s *service) indexfHtml(data *Body) (bytes.Buffer, error) {
+	check := func(b bytes.Buffer, err error) (bytes.Buffer, error) {
+		if err != nil {
+			return b, err
+		}
+		return b, nil
+	}
+
+	var tpl bytes.Buffer
+	t, err := template.New("webpage").Parse(indexHtml)
+	if err != nil {
+		return tpl, err
+	}
+	err = t.Execute(&tpl, data)
+	return check(tpl, err)
+}
+
+func (s *service) errorfHtml(data *Url) (bytes.Buffer, error) {
+	check := func(b bytes.Buffer, err error) (bytes.Buffer, error) {
+		if err != nil {
+			return b, err
+		}
+		return b, nil
+	}
+
+	var tpl bytes.Buffer
+	t, err := template.New("webpage").Parse(errorHtml)
+	if err != nil {
+		return tpl, err
+	}
+	err = t.Execute(&tpl, data)
+	return check(tpl, err)
+}
+
+func (s *service) MkSite() (string, error) {
+	albums := make(map[string]bool, 0)
+	objects, err := s.client.ListObject()
+	if err != nil {
+		fmt.Printf("Error while getig objects %s \n", err)
+		return "", err
+	}
+	a := regexp.MustCompile(`/`)
+	for _, object := range objects {
+		a := a.Split(object, 2)
+		albums[a[0]] = true
+	}
+	baseurl := s.config.EndpointUrl + "/" + s.config.Bucket
+	indexU := []Url{}
+	ii := 0
+	for i := range albums {
+		u := []Url{}
+
+		for _, object := range objects {
+			a := a.Split(object, 2)
+			if i != a[0] {
+				continue
+			}
+			if len(a) != 1 {
+				u = append(u, Url{
+					Url:  baseurl + "/" + a[0] + "/" + a[1],
+					Name: a[1],
+				})
+			}
+		}
+		data := Body{
+			Urls: u,
+		}
+		b, err := s.albumfHtml(&data)
+		if err != nil {
+			return "", fmt.Errorf("Error while creating html %s \n", i)
+		}
+		if err := s.client.PutObject(&b, i+strconv.Itoa(ii)+".html", int64(b.Len())); err != nil {
+			return "", fmt.Errorf("Error while creating html %s \n", i)
+		}
+		indexU = append(indexU, Url{
+			Url:  baseurl + "/" + i + strconv.Itoa(ii) + ".html",
+			Name: i,
+		})
+	}
+	data := Body{
+		Urls: indexU,
+	}
+	b, err := s.indexfHtml(&data)
+	if err != nil {
+		return "", fmt.Errorf("Error while creating html %s \n", "index")
+	}
+	if err := s.client.PutObject(&b, "index.html", int64(b.Len())); err != nil {
+		return "", fmt.Errorf("Error while creating html %s \n", "index")
+	}
+	u := Url{
+		Url:  baseurl + "/" + "index.html",
+		Name: "index.html",
+	}
+	b, err = s.errorfHtml(&u)
+	if err != nil {
+		return "", fmt.Errorf("Error while creating html %s \n", "error")
+	}
+	if err := s.client.PutObject(&b, "index.html", int64(b.Len())); err != nil {
+		return "", fmt.Errorf("Error while creating html %s \n", "error")
+	}
+	return baseurl + "/" + "index.html", nil
 }
