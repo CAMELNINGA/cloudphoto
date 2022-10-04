@@ -42,7 +42,7 @@ func (a *adapter) InitClient(localcfg *localcfg.Config) error {
 
 	// Подгружаем конфигрурацию из ~/.aws/*
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		//config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("AKID", "SECRET_KEY", "TOKEN")),
+		//config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("", "SECRET_KEY", "")),
 		config.WithEndpointResolverWithOptions(customResolver),
 	)
 	if err != nil {
