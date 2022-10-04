@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 
 	localcfg "github.com/CAMELNINGA/cloudphoto/config"
 	"github.com/CAMELNINGA/cloudphoto/internal/domain"
@@ -111,11 +112,15 @@ func (a *adapter) ListObject() ([]string, error) {
 }
 
 func (a *adapter) PutObject(file io.Reader, key string, size int64) error {
+	fileType := make([]byte, 512)
+	file.Read(fileType)
+	types := http.DetectContentType(fileType)
 	_, err := a.client.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket:        aws.String(a.config.Bucket),
 		Key:           aws.String(key),
 		Body:          file,
 		ContentLength: size,
+		ContentType:   &types,
 	})
 	if err != nil {
 		//a.logger.Err(err).Msg("Error while upload object in bucket")

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -123,6 +124,12 @@ func (s *service) Upload(album, path string) error {
 		}
 		a := regexp.MustCompile(`/`)
 		filea := a.Split(file, 2)
+		fileType := make([]byte, 512)
+		f.Read(fileType)
+		types := http.DetectContentType(fileType)
+		if types != "image/jpeg" {
+			return fmt.Errorf("Invaid files")
+		}
 		if err := s.client.PutObject(f, album+"/"+filea[1], fi.Size()); err != nil {
 			fmt.Printf("Error put object %s \n", album+"/"+file)
 			return err
@@ -256,7 +263,8 @@ type Url struct {
 	Name string
 }
 type Body struct {
-	Urls []Url
+	Urls  []Url
+	Index string
 }
 
 func (s *service) albumfHtml(data *Body) (bytes.Buffer, error) {
@@ -326,6 +334,7 @@ func (s *service) MkSite() (string, error) {
 	indexU := []Url{}
 	ii := 0
 	for i := range albums {
+
 		u := []Url{}
 
 		for _, object := range objects {
@@ -341,39 +350,43 @@ func (s *service) MkSite() (string, error) {
 			}
 		}
 		data := Body{
-			Urls: u,
+			Urls:  u,
+			Index: baseurl + "/" + "index.html",
 		}
 		b, err := s.albumfHtml(&data)
 		if err != nil {
 			return "", fmt.Errorf("Error while creating html %s \n", i)
 		}
 		if err := s.client.PutObject(&b, i+strconv.Itoa(ii)+".html", int64(b.Len())); err != nil {
-			return "", fmt.Errorf("Error while creating html %s \n", i)
+			return "", fmt.Errorf("Error while creating html %s \n", "album"+strconv.Itoa(ii))
 		}
 		indexU = append(indexU, Url{
-			Url:  baseurl + "/" + i + strconv.Itoa(ii) + ".html",
+			Url:  baseurl + "/" + "album" + strconv.Itoa(ii) + ".html",
 			Name: i,
 		})
 	}
 	data := Body{
 		Urls: indexU,
 	}
-	b, err := s.indexfHtml(&data)
+	index, err := s.indexfHtml(&data)
+
 	if err != nil {
 		return "", fmt.Errorf("Error while creating html %s \n", "index")
 	}
-	if err := s.client.PutObject(&b, "index.html", int64(b.Len())); err != nil {
+
+	if err := s.client.PutObject(&index, "index.html", int64(index.Len())); err != nil {
 		return "", fmt.Errorf("Error while creating html %s \n", "index")
 	}
 	u := Url{
 		Url:  baseurl + "/" + "index.html",
 		Name: "index.html",
 	}
-	b, err = s.errorfHtml(&u)
+	errorh, err := s.errorfHtml(&u)
 	if err != nil {
 		return "", fmt.Errorf("Error while creating html %s \n", "error")
 	}
-	if err := s.client.PutObject(&b, "index.html", int64(b.Len())); err != nil {
+
+	if err := s.client.PutObject(&errorh, "error.html", int64(errorh.Len())); err != nil {
 		return "", fmt.Errorf("Error while creating html %s \n", "error")
 	}
 	return baseurl + "/" + "index.html", nil

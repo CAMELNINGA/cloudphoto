@@ -37,7 +37,7 @@ const (
 			<div class="galleria">
 			{{range .Urls}}<img src={{ .Url}} data-title={{ .Name}}>{{else}}<div><strong>no rows</strong></div>{{end}}
 			</div>
-			<p>Вернуться на <a href="index.html">главную страницу</a> фотоархива</p>
+			<p>Вернуться на <a href="{{ .Index}}">главную страницу</a> фотоархива</p>
 			<script>
 				(function() {
 					Galleria.run('.galleria');
