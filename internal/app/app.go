@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/CAMELNINGA/cloudphoto/config"
+	"github.com/CAMELNINGA/cloudphoto/internal/controller/cli"
 	"github.com/CAMELNINGA/cloudphoto/internal/domain"
 	"github.com/CAMELNINGA/cloudphoto/internal/usecase/client"
 )
@@ -15,10 +16,8 @@ func Run() {
 	client := client.NewAdapter()
 	client.InitClient(cfg)
 	service := domain.NewService(client)
-	service.List("")
-	service.Upload("test", "config")
-	service.List("test")
-	service.Download("test", "./")
-	service.Download("test", "test")
-	service.Delete("test", "")
+	err = cli.NewAdapter(service)
+	if err != nil {
+		panic(err)
+	}
 }

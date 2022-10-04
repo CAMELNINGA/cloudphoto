@@ -11,7 +11,7 @@ import (
 )
 
 type Service interface {
-	InitClient(config *config.Config) error
+	InitClient(bucket, awskey, awssec string) error
 	Download(album, dir string) error
 	Upload(album, path string) error
 	List(album string) error
@@ -29,7 +29,11 @@ func NewService(client Client) Service {
 	}
 }
 
-func (s *service) InitClient(config *config.Config) error {
+func (s *service) InitClient(bucket, awskey, awssec string) error {
+	config, err := config.InitConfig(bucket, awskey, awssec)
+	if err != nil {
+		return err
+	}
 	return s.client.InitClient(config)
 }
 
@@ -68,13 +72,13 @@ func (s *service) Download(album, dir string) error {
 		if album != a[0] {
 			continue
 		}
-		if err := os.MkdirAll(filepath.Dir(object), 0770); err != nil {
+		if err := os.MkdirAll(dir, 0770); err != nil {
 			fmt.Printf("Error creating dir %s \n", filepath.Dir(object))
 			break
 		}
 		wg.Add(1)
 
-		go d(object, a[1])
+		go d(object, dir+"/"+a[1])
 	}
 
 	wg.Wait()
@@ -121,10 +125,14 @@ func (s *service) Upload(album, path string) error {
 
 func FilePathWalkDir(root string) ([]string, error) {
 	var files []string
+	a := regexp.MustCompile(`/`)
 
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
-			files = append(files, path)
+			splitPath := a.Split(path, 3)
+			if len(splitPath) == 2 {
+				files = append(files, path)
+			}
 		}
 		return nil
 	})
@@ -161,9 +169,9 @@ func (s *service) List(album string) error {
 			continue
 		}
 		if len(a) != 1 {
-			fmt.Printf("Album %s Object %s ", a[0], a[1])
+			fmt.Printf("Album %s Object %s \n", a[0], a[1])
 		} else {
-			fmt.Printf("Object %s ", object)
+			fmt.Printf("Object %s \n", object)
 		}
 	}
 	return nil
