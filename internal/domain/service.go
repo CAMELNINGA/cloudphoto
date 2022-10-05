@@ -128,7 +128,6 @@ func (s *service) Upload(album, path string) error {
 		filep := p.Split(file, -1)
 		ty := len(filep)
 		fileType := make([]byte, 512)
-		f.Read(fileType)
 		types := http.DetectContentType(fileType)
 		if types != "image/jpeg" && filep[ty-1] != "jpeg" && filep[ty-1] != "jpg" {
 			fmt.Println(types)
