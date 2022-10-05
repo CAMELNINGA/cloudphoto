@@ -1,6 +1,0 @@
-[Default]
-bucket                = asdfsdfd
-aws_access_key_id     = YCAJE1i2ZHnqH3ySOxmmxseTN
-aws_secret_access_key = YCMwLeDCqDr-MXfhNAHxoKtYTlGsSEAxfrCOv_rD
-region                = ru-central1
-endpoint_url          = https://storage.yandexcloud.net
