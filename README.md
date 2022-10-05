@@ -8,6 +8,6 @@
 Если же хотитне сами собрать, то нкужно Golang 19 версии 
 комнда для сборки
 ```
-go build cmd/cloudphoto/main.go
+go build cmd/cloudphoto/cloudphoto.go
 
 ```

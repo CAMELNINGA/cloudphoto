@@ -80,6 +80,9 @@ func (s *service) Download(album, dir string) error {
 		}
 		fmt.Printf("successfully downloaded data from %s/\n to file %s\n", object, name)
 	}
+	if !haveAlbum(objects, album, a) {
+		return fmt.Errorf("Error dosent album %s", album)
+	}
 	for _, object := range objects {
 		a := a.Split(object, 2)
 		if album != a[0] {
@@ -122,18 +125,12 @@ func (s *service) Upload(album, path string) error {
 			fmt.Printf("Error open stat %s \n", err)
 			return err
 		}
-		a := regexp.MustCompile(`/`)
-		p := regexp.MustCompile(`.`)
-		filea := a.Split(file, 2)
-		filep := p.Split(file, -1)
-		ty := len(filep)
-		fileType := make([]byte, 512)
-		types := http.DetectContentType(fileType)
-		if types != "image/jpeg" && filep[ty-1] != "jpeg" && filep[ty-1] != "jpg" {
-			fmt.Println(types)
+
+		if fi.Name()[len(fi.Name())-4:] != "jpeg" && fi.Name()[len(fi.Name())-3:] != "jpg" {
+			fmt.Println("Invaid files    " + file)
 			return fmt.Errorf("Invaid files")
 		}
-		if err := s.client.PutObject(f, album+"/"+filea[1], fi.Size(), types); err != nil {
+		if err := s.client.PutObject(f, album+"/"+fi.Name(), fi.Size(), "application/octet-stream"); err != nil {
 			fmt.Printf("Error put object %s \n", album+"/"+file)
 			return err
 		}
@@ -151,16 +148,28 @@ func (s *service) Upload(album, path string) error {
 func FilePathWalkDir(root string) ([]string, error) {
 	var files []string
 	a := regexp.MustCompile(`/`)
-
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	lll := 2
+	if root == "./" {
+		lll = 1
+	}
+	var err error
+	defer func() ([]string, error) {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered. Error:\n", r)
+			return files, fmt.Errorf("Recovered. Error:\n", r)
+		}
+		return files, err
+	}()
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
-			splitPath := a.Split(path, 3)
-			if len(splitPath) == 2 {
+			splitPath := a.Split(path[len(root):], 2)
+			if len(splitPath) == lll {
 				files = append(files, path)
 			}
 		}
 		return nil
 	})
+
 	return files, err
 }
 
@@ -193,11 +202,11 @@ func (s *service) List(album string) error {
 		return fmt.Errorf("error don't find album %s \n", album)
 	}
 	for _, object := range objects {
-		a := a.Split(object, 2)
+		a := a.Split(object, -1)
 		if album != a[0] && album != "" {
 			continue
 		}
-		if album == "" {
+		if album == "" && len(a) != 1 {
 			albums[a[0]] = true
 		} else if len(a) != 1 {
 			fmt.Printf("Object %s \n", a[1])
