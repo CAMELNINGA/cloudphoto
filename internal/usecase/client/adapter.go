@@ -4,13 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 
 	localcfg "github.com/CAMELNINGA/cloudphoto/config"
 	"github.com/CAMELNINGA/cloudphoto/internal/domain"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
@@ -49,7 +48,7 @@ func (a *adapter) InitClient(localcfg *localcfg.Config) error {
 
 	// Подгружаем конфигрурацию из ~/.aws/*
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(a.config.AwsAccessKeyID, a.config.AwsSecretAccessKey, "")),
+		//	config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(a.config.AwsAccessKeyID, a.config.AwsSecretAccessKey, "")),
 		config.WithEndpointResolverWithOptions(customResolver),
 	)
 	if err != nil {
@@ -111,19 +110,18 @@ func (a *adapter) ListObject() ([]string, error) {
 	return objects, nil
 }
 
-func (a *adapter) PutObject(file io.Reader, key string, size int64) error {
-	fileType := make([]byte, 512)
-	file.Read(fileType)
-	types := http.DetectContentType(fileType)
-	_, err := a.client.PutObject(context.TODO(), &s3.PutObjectInput{
-		Bucket:        aws.String(a.config.Bucket),
-		Key:           aws.String(key),
-		Body:          file,
-		ContentLength: size,
-		ContentType:   &types,
+func (a *adapter) PutObject(file io.Reader, key string, size int64, types string) error {
+	uploader := manager.NewUploader(a.client)
+
+	_, err := uploader.Upload(context.TODO(), &s3.PutObjectInput{
+		Bucket:      aws.String(a.config.Bucket),
+		Key:         aws.String(key),
+		Body:        file,
+		ContentType: &types,
 	})
 	if err != nil {
-		//a.logger.Err(err).Msg("Error while upload object in bucket")
+		fmt.Println(err)
+		//a.logger.Err(err).("Error while upload object in bucket")
 		return domain.ErrInternalS3
 	}
 	return nil

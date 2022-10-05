@@ -123,14 +123,18 @@ func (s *service) Upload(album, path string) error {
 			return err
 		}
 		a := regexp.MustCompile(`/`)
+		p := regexp.MustCompile(`.`)
 		filea := a.Split(file, 2)
+		filep := p.Split(file, -1)
+		ty := len(filep)
 		fileType := make([]byte, 512)
 		f.Read(fileType)
 		types := http.DetectContentType(fileType)
-		if types != "image/jpeg" {
+		if types != "image/jpeg" && filep[ty-1] != "jpeg" && filep[ty-1] != "jpg" {
+			fmt.Println(types)
 			return fmt.Errorf("Invaid files")
 		}
-		if err := s.client.PutObject(f, album+"/"+filea[1], fi.Size()); err != nil {
+		if err := s.client.PutObject(f, album+"/"+filea[1], fi.Size(), types); err != nil {
 			fmt.Printf("Error put object %s \n", album+"/"+file)
 			return err
 		}
@@ -267,10 +271,10 @@ type Body struct {
 	Index string
 }
 
-func (s *service) albumfHtml(data *Body) (bytes.Buffer, error) {
-	check := func(b bytes.Buffer, err error) (bytes.Buffer, error) {
+func (s *service) albumfHtml(data *Body) (*bytes.Buffer, error) {
+	check := func(b *bytes.Buffer, err error) (*bytes.Buffer, error) {
 		if err != nil {
-			return b, err
+			return nil, err
 		}
 		return b, nil
 	}
@@ -278,16 +282,17 @@ func (s *service) albumfHtml(data *Body) (bytes.Buffer, error) {
 	var tpl bytes.Buffer
 	t, err := template.New("webpage").Parse(albumHtml)
 	if err != nil {
-		return tpl, err
+		return nil, err
 	}
 	err = t.Execute(&tpl, data)
-	return check(tpl, err)
+
+	return check(&tpl, err)
 }
 
-func (s *service) indexfHtml(data *Body) (bytes.Buffer, error) {
-	check := func(b bytes.Buffer, err error) (bytes.Buffer, error) {
+func (s *service) indexfHtml(data *Body) (*bytes.Buffer, error) {
+	check := func(b *bytes.Buffer, err error) (*bytes.Buffer, error) {
 		if err != nil {
-			return b, err
+			return nil, err
 		}
 		return b, nil
 	}
@@ -295,16 +300,17 @@ func (s *service) indexfHtml(data *Body) (bytes.Buffer, error) {
 	var tpl bytes.Buffer
 	t, err := template.New("webpage").Parse(indexHtml)
 	if err != nil {
-		return tpl, err
+		return nil, err
 	}
 	err = t.Execute(&tpl, data)
-	return check(tpl, err)
+
+	return check(&tpl, err)
 }
 
-func (s *service) errorfHtml(data *Url) (bytes.Buffer, error) {
-	check := func(b bytes.Buffer, err error) (bytes.Buffer, error) {
+func (s *service) errorfHtml(data *Url) (*bytes.Buffer, error) {
+	check := func(b *bytes.Buffer, err error) (*bytes.Buffer, error) {
 		if err != nil {
-			return b, err
+			return nil, err
 		}
 		return b, nil
 	}
@@ -312,10 +318,11 @@ func (s *service) errorfHtml(data *Url) (bytes.Buffer, error) {
 	var tpl bytes.Buffer
 	t, err := template.New("webpage").Parse(errorHtml)
 	if err != nil {
-		return tpl, err
+		return nil, err
 	}
 	err = t.Execute(&tpl, data)
-	return check(tpl, err)
+
+	return check(&tpl, err)
 }
 
 func (s *service) MkSite() (string, error) {
@@ -339,10 +346,7 @@ func (s *service) MkSite() (string, error) {
 
 		for _, object := range objects {
 			a := a.Split(object, 2)
-			if i != a[0] {
-				continue
-			}
-			if len(a) != 1 {
+			if i == a[0] && len(a) == 2 {
 				u = append(u, Url{
 					Url:  baseurl + "/" + a[0] + "/" + a[1],
 					Name: a[1],
@@ -357,13 +361,19 @@ func (s *service) MkSite() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("Error while creating html %s \n", i)
 		}
-		if err := s.client.PutObject(&b, i+strconv.Itoa(ii)+".html", int64(b.Len())); err != nil {
+		ib := b.Bytes()
+		r := bytes.NewReader(ib)
+		types := http.DetectContentType(ib)
+		if err := s.client.PutObject(r, "album"+strconv.Itoa(ii)+".html", 0, types); err != nil {
 			return "", fmt.Errorf("Error while creating html %s \n", "album"+strconv.Itoa(ii))
 		}
-		indexU = append(indexU, Url{
-			Url:  baseurl + "/" + "album" + strconv.Itoa(ii) + ".html",
-			Name: i,
-		})
+		if len(u) != 0 {
+			indexU = append(indexU, Url{
+				Url:  baseurl + "/" + "album" + strconv.Itoa(ii) + ".html",
+				Name: i,
+			})
+			ii++
+		}
 	}
 	data := Body{
 		Urls: indexU,
@@ -373,8 +383,12 @@ func (s *service) MkSite() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("Error while creating html %s \n", "index")
 	}
+	ib := index.Bytes()
+	r := bytes.NewReader(ib)
 
-	if err := s.client.PutObject(&index, "index.html", int64(index.Len())); err != nil {
+	types := http.DetectContentType(ib)
+
+	if err := s.client.PutObject(r, "index.html", 0, types); err != nil {
 		return "", fmt.Errorf("Error while creating html %s \n", "index")
 	}
 	u := Url{
@@ -385,8 +399,10 @@ func (s *service) MkSite() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("Error while creating html %s \n", "error")
 	}
-
-	if err := s.client.PutObject(&errorh, "error.html", int64(errorh.Len())); err != nil {
+	eb := errorh.Bytes()
+	r = bytes.NewReader(eb)
+	types = http.DetectContentType(eb)
+	if err := s.client.PutObject(r, "error.html", 0, types); err != nil {
 		return "", fmt.Errorf("Error while creating html %s \n", "error")
 	}
 	return baseurl + "/" + "index.html", nil

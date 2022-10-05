@@ -21,7 +21,8 @@ const (
 		<ul>
 			{{range .Urls}} <li><a href={{ .Url}}>{{ .Name}}</a></li>{{else}}<div><strong>no rows</strong></div>{{end}}
 		</ul>
-	</body>`
+	</body>
+	</html>`
 	albumHtml = `<!doctype html>
 	<html>
 		<head>
